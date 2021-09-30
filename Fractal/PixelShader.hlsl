@@ -106,6 +106,40 @@ float3 grad(float3 p, float baseline)
 	return normalize(float3(d1, d2, d3));
 }
 
+float3 normal6(float3 p, float h = 0.0001f)
+{
+	// central differences
+	// 6 evaluations
+	return normalize(float3(
+		map(p + float3(h, 0, 0)) - map(p - float3(h, 0, 0)),
+		map(p + float3(0, h, 0)) - map(p - float3(0, h, 0)),
+		map(p + float3(0, 0, h)) - map(p - float3(0, 0, h))
+		));
+}
+
+float3 normal4(float3 p, float h = 0.0001f)
+{
+	// forward differences
+	// 4 evaluations
+	const float q = map(p);
+	return normalize(float3(
+		map(p + float3(h, 0, 0)) - q,
+		map(p + float3(0, h, 0)) - q,
+		map(p + float3(0, 0, h)) - q
+		));
+}
+
+float3 normal4_tetra(float3 p, float h = 0.0001f)
+{
+	const float2 k = float2(1, -1);
+	return normalize(
+		k.xyy * map(p + k.xyy * h) +
+		k.yyx * map(p + k.yyx * h) +
+		k.yxy * map(p + k.yxy * h) +
+		k.xxx * map(p + k.xxx * h)
+	);
+}
+
 void ps_main(ps_input input, out ps_output output)
 {
 	float3 dir = normalize(front_vec + input.screenpos.x * right_vec + input.screenpos.y * top_vec);
