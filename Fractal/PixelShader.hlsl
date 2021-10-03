@@ -106,6 +106,18 @@ float3 grad(float3 p, float baseline)
 	return normalize(float3(d1, d2, d3));
 }
 
+float fake_AO(float3 pos, float3 normal, float max_dist, float strength)
+{
+	const float3 d =
+		map(pos + normal + float3(+1, 0, 0)) * float3(+1, 0, 0) +
+		map(pos + normal + float3(-1, 0, 0)) * float3(-1, 0, 0) +
+		map(pos + normal + float3(0, +1, 0)) * float3(0, +1, 0) +
+		map(pos + normal + float3(0, -1, 0)) * float3(0, -1, 0) +
+		map(pos + normal + float3(0, 0, +1)) * float3(0, 0, +1) +
+		map(pos + normal + float3(0, 0, -1)) * float3(0, 0, -1);
+	return saturate(pow(length(d) / max_dist, strength));
+}
+
 void ps_main(ps_input input, out ps_output output)
 {
 	float3 dir = normalize(front_vec + input.screenpos.x * right_vec + input.screenpos.y * top_vec);
