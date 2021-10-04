@@ -93,9 +93,54 @@ float fractal2(float3 p, uint depth)
 	return d;
 }
 
+float sphere(float3 p, float3 pos, float radius)
+{
+	return length(pos - p) - radius;
+}
+
+float ellipsoid_exact(float3 p, float3 pos, float3 radii)
+{
+	float3 dist = pow(pos - p, 2.0f);
+	float3 radii_sq = pow(radii, -2.0f);
+	float lhs = dot(dist, radii_sq);
+	return sqrt(lhs) - 1.0f;
+}
+
+// https://iquilezles.org/www/articles/ellipsoids/ellipsoids.htm
+float ellipsoid_approx(float3 p, float3 pos, float3 radii)
+{
+	const float3 q = p - pos;
+	float k1 = length(q / radii);
+	float k2 = length(q / (radii * radii));
+	return k1 * (k1 - 1.0f) / k2;
+}
+
+// https://iquilezles.org/www/articles/ellipsedist/ellipsedist.htm
+float ellipsoid_symmetric(float3 p, float3 pos, float2 radii)
+{
+	const float3 pp = p - pos;
+	const float2 q = abs(float2(pp.x, length(pp.yz))); //BUG
+	const bool s = dot(q / radii, q / radii);
+	float w = s > 1.0f ? atan2(q.y * radii.x, q.x * radii.y) : ((radii.x * (q.x - radii.x) < radii.y * (q.y - radii.y)) ? 1.5707963 : 0.0);
+	for (int i = 0; i < 4; ++i)
+	{
+		const float2 cs = float2(cos(w), sin(w));
+		const float2 u = radii * float2(cs.x, cs.y);
+		const float2 v = radii * float2(-cs.y, cs.x);
+		w += dot(q - u, v) / (dot(q - u, u) + dot(v, v));
+	}
+	return length(q - radii * float2(cos(w), sin(w))) * sign(s);
+}
+
 float map(float3 p)
 {
-	return fractal2(p, 3);
+	return min(sphere(p, float3(2, 0, 0), 1),
+		min(ellipsoid_exact(p, float3(-2, 0, 0), float3(1, 2, 3)),
+			min(ellipsoid_approx(p, float3(-6, 0, 0), float3(1, 2, 3)),
+				ellipsoid_symmetric(p, float3(6, 0, 0), float2(1, 2))
+			)
+		)
+	);
 }
 
 float3 grad(float3 p, float baseline)
@@ -119,6 +164,7 @@ void ps_main(ps_input input, out ps_output output)
 		{
 			float3 normal = grad(pos, d);
 			float shading = clamp(dot(normal, lighting_dir), 0.f, 1.f);
+
 			col = float3(1.f, 1.f, 0.f) * shading;
 			break;
 		}
