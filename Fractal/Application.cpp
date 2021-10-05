@@ -123,14 +123,6 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 					camera.RotateX(ydiff / -500.f);
 				}
 			}
-			if (mouse_state[MouseButton::Middle])
-			{
-				scroll_pos1 += xdiff / 1000.f;
-				scroll_pos1 = std::min(std::max(scroll_pos1, -1.f), +1.f);
-
-				scroll_pos2 += ydiff / 1000.f;
-				scroll_pos2 = std::min(std::max(scroll_pos2, -10.f), +10.f);
-			}
 			if (mouse_state[MouseButton::Right])
 			{
 				scroll_pos3 += xdiff / 1000.f;
@@ -175,6 +167,12 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 		break;
 	case WM_RBUTTONUP:
 		mouse_state[MouseButton::Right] = false;
+		break;
+	case WM_MOUSEWHEEL:
+		{
+			const int ydiff = GET_WHEEL_DELTA_WPARAM(wParam);
+			scroll_pos2 += ydiff / 120.f / 10.0f;
+		}
 		break;
 	case WM_DESTROY:
 		PostQuitMessage(0);
