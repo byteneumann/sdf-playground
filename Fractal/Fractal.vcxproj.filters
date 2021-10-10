@@ -60,4 +60,12 @@
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="shader\pshader.hlsl">
+      <Filter>Ressourcendateien</Filter>
+    </FxCompile>
+    <FxCompile Include="shader\vshader.hlsl">
+      <Filter>Ressourcendateien</Filter>
+    </FxCompile>
+  </ItemGroup>
 </Project>

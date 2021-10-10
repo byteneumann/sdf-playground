@@ -38,8 +38,8 @@ bool Application::Init(HINSTANCE hInstance)
 		unsigned windowstyle = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 		int xpos = CW_USEDEFAULT;
 		int ypos = CW_USEDEFAULT;
-		unsigned width = 1920 / 16;// 800;
-		unsigned height = 1080 / 16; // 600;
+		unsigned width = 800;
+		unsigned height = 600;
 
 		RECT r;
 		SetRect(&r, 0, 0, width, height);
@@ -194,7 +194,9 @@ bool Application::initGraphics()
 	if (!initGeometry())
 		return false;
 
+#ifdef PROFILE
 	profiler.setGPU(graphics->GetDevice(), graphics->GetContext());
+#endif
 
 	RECT rect;
 	GetClientRect(hWnd, &rect);
@@ -381,6 +383,7 @@ bool Application::initGeometry()
 
 void Application::render()
 {
+#ifdef PROFILE
 	if (profiler.fetchResults())
 	{
 		auto results = profiler.getResults();
@@ -392,14 +395,19 @@ void Application::render()
 			OutputDebugString(msg.c_str());
 		}
 	}
+#endif
 
 	float clear_color[4] = {0.25f, 0.f, 0.f, 0.f};
 	auto ctx = graphics->GetContext();
 
+#ifdef PROFILE
 	profiler.beginFrame();
+#endif
 	ctx->ClearRenderTargetView(graphics->GetMainRendertargetView(), clear_color);
 	ctx->ClearDepthStencilView(graphics->GetMainDepthStencilView(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
+#ifdef PROFILE
 	profiler.profile("clear");
+#endif
 
 	// only render something if the shader step was successful, else show a blank screen
 	if (v_shader && p_shader && input_layout)
@@ -452,16 +460,22 @@ void Application::render()
 
 		ctx->IASetIndexBuffer(index_buffer, DXGI_FORMAT_R16_UINT, 0);
 
+#ifdef PROFILE
 		profiler.profile("setup");
+#endif
 
 		ctx->DrawIndexed(6, 0, 0);
 
+#ifdef PROFILE
 		profiler.profile("draw");
+#endif
 	}
 
 	graphics->Present();
+#ifdef PROFILE
 	profiler.profile("present");
 	profiler.endFrame();
+#endif
 
 	graphics->WaitForVBlank();
 }
