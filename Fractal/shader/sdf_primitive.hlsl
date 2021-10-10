@@ -21,10 +21,52 @@ float sdBox(float3 pos, float3 size)
 }
 
 // TODO: output an "extra distance" which is a fast step towards the box based on the exact distance
+//float sdBoxFast(float3 pos, float3 dir, float3 size)
+//{
+//	float3 q = abs(pos) - size;
+//	return length(max(q, 0.f)) + min(max(q.x, max(q.y, q.z)), 0.f);
+//}
+
 float sdBoxFast(float3 pos, float3 dir, float3 size)
 {
-	float3 q = abs(pos) - size;
-	return length(max(q, 0.f)) + min(max(q.x, max(q.y, q.z)), 0.f);
+	if (length(dir) < 1.0e-3f) // expensive flag :/
+		return sdBox(pos, size);
+
+	// https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
+	float t_min;
+	float t_max;
+	//float3 q = abs(pos) - size;
+	//float3 t = q / dir;
+	//return length(q) + max(t[0], max(t[1], t[2]));
+	for (int i = 0; i < 3; ++i)
+	{
+		float t_min_i = (pos[i] - 0.5f * size[i]) / dir[i];
+		float t_max_i = (pos[i] + 0.5f * size[i]) / dir[i];
+
+		if (t_min_i > t_max_i)
+		{
+			const float swap = t_min_i;
+			t_min_i = t_max_i;
+			t_max_i = swap;
+		}
+
+		if (i == 0)
+		{
+			t_min = t_min_i;
+			t_max = t_max_i;
+		}
+		else
+		{
+			if ((t_min > t_max_i) || (t_min_i > t_max))
+				return 1.0e12f; // no intersection -> inf
+
+			if (t_min_i > t_min)
+				t_min = t_min_i;
+			if (t_max_i < t_max)
+				t_max = t_max_i;
+		}
+	}
+	return t_min; // assume dir is normalized
 }
 
 float sdPlane(float3 pos, float3 plane_norm)
