@@ -12,6 +12,7 @@
 
 using namespace Math3D;
 
+//#define PROFILE
 
 bool Application::Init(HINSTANCE hInstance)
 {
