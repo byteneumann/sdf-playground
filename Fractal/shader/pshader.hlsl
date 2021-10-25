@@ -30,6 +30,9 @@ static const float shadow_eps = 0.0003f;   // how far to step along the light ra
 static const float max_dist_check = 1e30; // maximum practical number
 static const float3 lighting_dir = normalize(float3(-1.f, -1.f, 1.5f));
 
+static const uint NUM_ITERS = 1000;
+static const uint NUM_REFLS = 2;
+
 static const float debug_ruler_scale = 0.01f;
 
 float sdf_foreground(float3 p);
@@ -51,15 +54,16 @@ float sdSphere(float3 p, float r)
 	return length(p) - r;
 }
 
-//float sdBox(float3 p, float3 size)
-//{
-//	float3 q = abs(p) - size;
-//	return length(max(q, 0.f)) + min(max(q.x, max(q.y, q.z)), 0.f);
-//}
+float sdBox(float3 p, float3 size)
+{
+	float3 q = abs(p) - size;
+	return length(max(q, 0.f)) + min(max(q.x, max(q.y, q.z)), 0.f);
+}
 
 float sdPlane(float3 p, float3 normal)
 {
-	return length(dot(p, normal) * normal);
+	//return length(dot(p, normal) * normal);
+	return dot(p, normal);
 }
 
 //float raySphere(float3 eye, float3 dir, float p, float r)
@@ -163,6 +167,7 @@ float sdf_foreground(float3 p)
 {
 	float d = opCombine(sdSphere(p, 1), sdSphere(opTranslate(p, float3(3, 0, 0)), 0.6f + 0.06f * cos(stime)));
 	//d = opCombine(d, sdPlane(opTranslate(p, float3(0, -1, 0)), float3(0, 1, 0)));
+	d = opCombine(d, sdBox(opTranslate(p, float3(-3, 0, 0)), float3(1, 2, 1)));
 	return d;
 }
 
@@ -174,20 +179,21 @@ float sdf_background(float3 p)
 
 void ps_main(ps_input input, out ps_output output)
 {
-	const float3 dir = normalize(front_vec + input.screenpos.x * right_vec + input.screenpos.y * top_vec);
+	const float3 eye_dir = normalize(front_vec + input.screenpos.x * right_vec + input.screenpos.y * top_vec);
 
 	uint shader_pass = 0;
 	float3 pos = eye;
+	float3 dir = eye_dir;
 	float3 col = float3(0.0f, 0.0f, 0.0f);
 	//if (ray(p, dir) > 0.0f)
-	bool hit = false;
+	uint hit = 0;
 	{
 		// https://erleuchtet.org/~cupe/permanent/enhanced_sphere_tracing.pdf
 		float omega = 1.6f; // in [1.0; 2.0]
 		float last_d = 0.0f;
-		for (uint iter = 0; iter < 100; ++iter)
+		for (uint iter = 0; iter < NUM_ITERS && hit < NUM_REFLS; ++iter)
 		{
-			const float d = sdf(pos, shader_pass);
+			float d = sdf(pos, shader_pass);
 			if (omega > 1.0f && last_d * omega > last_d + d) // no overlap
 			{
 				// undo last step
@@ -202,31 +208,43 @@ void ps_main(ps_input input, out ps_output output)
 				const float3 normal = normal6(pos, shader_pass);
 				const float shading = clamp(dot(-normal, lighting_dir), 0.0f, 1.0f);
 				//const float shading = 0.5f * (1.0f + iter / 100.0f);
-				col = float3(1.0f, 1.0f, 0.0f) * shading;
-				hit = true;
-				break;
+				//const float shading = clamp(0.1f * distance_travelled, 0.5f, 1.0f);
+				col += float3(1.0f, 1.0f, 0.0f) * shading;
+
+				++hit;
+				if (hit < NUM_REFLS) // reflection
+				{
+					dir = reflect(dir, normal); // Snell's law
+					omega = 1.6f;
+					d = last_d; // one step backwards
+					last_d = 0.0f;
+					iter = 0;
+				}
+				else // hit (no more reflections)
+				{
+					break;
+				}
 			}
 			pos += dir * d * omega;
 			last_d = d;
 		}
 	}
 	shader_pass = 1;
-	if (1 && !hit)
+	if (hit < NUM_REFLS)
 	{
-		pos = eye;
-		for (uint iter = 0; iter < 100; ++iter)
+		for (uint iter = 0; iter < NUM_ITERS; ++iter)
 		{
 			const float d = sdf(pos, shader_pass);
 			if (d < dist_eps)
 			{
 				const float3 normal = normal6(pos, shader_pass);
 				const float shading = clamp(dot(-normal, lighting_dir), 0.0f, 1.0f);
-				col = float3(0.4f, 0.4f, 0.7f) * shading;
+				col += float3(0.7f, 0.4f, 0.4f) * shading;
 				break;
 			}
 			pos += dir * d;
 		}
 	}
 
-	output.color = float4(col, 1.0f);
+	output.color = float4(col / min(1.0f, 1.0f + hit), 1.0f);
 };
