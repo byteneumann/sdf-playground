@@ -24,20 +24,46 @@ cbuffer camera
 	float free_param;
 };
 
+static const float pi = 3.14159265f;
 static const float dist_eps = 0.0001f;    // how close to the object before terminating
 static const float grad_eps = 0.0001f;    // how far to move when computing the gradient
 static const float shadow_eps = 0.0003f;   // how far to step along the light ray when looking for occluders
 static const float max_dist_check = 1e30; // maximum practical number
 static const float3 lighting_dir = normalize(float3(-1.f, -1.f, 1.5f));
 
-static const uint NUM_ITERS = 1000;
-static const uint NUM_REFLS = 2;
+static const uint NUM_ITERS = 100;
+static const uint NUM_REFLS = 1;
 
 static const float debug_ruler_scale = 0.01f;
 
 float sdf_foreground(float3 p);
 float sdf_background(float3 p);
 //float4 col(float3 p);
+
+float opUnion(float d1, float d2)
+{
+	return min(d1, d2);
+}
+
+float opUnion(float d1, float d2, float d3)
+{
+	return min(d1, min(d2, d3));
+}
+
+float opUnion(float d1, float d2, float d3, float d4)
+{
+	return min(d1, min(d2, min(d3, d4)));
+}
+
+float opIntersect(float d1, float d2)
+{
+	return max(d1, d2);
+}
+
+float3 opTranslate(float3 p, float3 delta)
+{
+	return p - delta;
+}
 
 float sdf(float3 p, uint shader_pass)
 {
@@ -56,7 +82,7 @@ float sdSphere(float3 p, float r)
 
 float sdBox(float3 p, float3 size)
 {
-	float3 q = abs(p) - size;
+	const float3 q = abs(p) - size;
 	return length(max(q, 0.f)) + min(max(q.x, max(q.y, q.z)), 0.f);
 }
 
@@ -66,19 +92,61 @@ float sdPlane(float3 p, float3 normal)
 	return dot(p, normal);
 }
 
-//float raySphere(float3 eye, float3 dir, float p, float r)
-//{
-//	return ;
-//}
-
-float opCombine(float d1, float d2)
+/**
+ * torus around y-axis
+ * @param r1 large radius
+ * @param r2 small radius
+ */
+ //TODO check dimensions
+float sdTorus(float3 p, float r1, float r2)
 {
-	return min(d1, d2);
+	const float2 q = float2(length(p.xz) - r1, p.y);
+	return length(q) - r2;
 }
 
-float3 opTranslate(float3 p, float3 delta)
+//TODO check dimensions
+float sdCylinder(float3 p, float r, float h)
 {
-	return p - delta;
+	const float2 d = abs(float2(length(p.xz), p.y)) - float2(r, h);
+	return min(max(d.x, d.y), 0.0f) + length(max(0.0f, d));
+}
+
+//TODO check dimensions
+float sdCylinderRounded(float3 p, float r1, float h, float r2)
+{
+	const float2 d = float2(length(p.xz) - r1 + r2, abs(p.y) - h);
+	return min(max(d.x, d.y), 0.0f) + length(max(0.0f, d)) - r2;
+}
+
+/**
+ * cone (bound), origin is at center of base
+ * @param alpha angle between y-axis and cone in radians
+ * @param h height of the cone
+ */
+//TODO check dimensions
+float sdCone(float3 p, float alpha, float h)
+{
+	const float2 cs = float2(cos(alpha), sin(alpha));
+	const float q = length(p.xz);
+	return max(dot(cs, float2(q, p.y - h)), -p.y);
+}
+
+float sdPawn(float3 p, float size)
+{
+	return opUnion(
+		sdCylinderRounded(opTranslate(p, float3(0, 0.05 * size, 0)), 0.5f * size, 0.1f * size, 0.05f * size), // base
+		sdTorus(opTranslate(p, float3(0, 0.225f * size, 0)), 0.3f * size, 0.05f * size), // base torus
+		sdCone(opTranslate(p, float3(0, 0.2f * size, 0)), 0.125f * pi, 0.8f * size), // body cone
+		opUnion(
+			sdTorus(opTranslate(p, float3(0, 0.8f * size, 0)), 0.125f * size, 0.05f * size), // top torus
+			sdSphere(opTranslate(p, float3(0, size, 0)), 0.25f * size) // top
+			)
+		);
+}
+
+float raySphere(float3 p, float3 dir, float r)
+{
+	return length(cross(p, dir)) - r;
 }
 
 float sdPlaneFast(float3 pos, float3 dir, float3 plane_norm)
@@ -165,9 +233,12 @@ float3 normal4_tetra(float3 p, uint shader_pass, float h = 0.0001f)
 
 float sdf_foreground(float3 p)
 {
-	float d = opCombine(sdSphere(p, 1), sdSphere(opTranslate(p, float3(3, 0, 0)), 0.6f + 0.06f * cos(stime)));
-	//d = opCombine(d, sdPlane(opTranslate(p, float3(0, -1, 0)), float3(0, 1, 0)));
-	d = opCombine(d, sdBox(opTranslate(p, float3(-3, 0, 0)), float3(1, 2, 1)));
+	float d;
+	//d = opUnion(sdSphere(p, 1), sdSphere(opTranslate(p, float3(3, 0, 0)), 0.6f + 0.06f * cos(stime)));
+	//d = opUnion(d, sdPlane(opTranslate(p, float3(0, -1, 0)), float3(0, 1, 0)));
+	//d = opUnion(d, sdBox(opTranslate(p, float3(-3, 0, 0)), float3(1, 2, 1)));
+	//d = sdSphere(p, 1);
+	d = sdPawn(p, 1.0f);
 	return d;
 }
 
